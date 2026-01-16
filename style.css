@@ -145,8 +145,8 @@
             background: linear-gradient(45deg, #FF8E53, #FE6B8B);
             border: none;
             color: white;
-            padding: 1.5vmin 3.5vmin;
-            font-size: 2.2vmin;
+            padding: 0.8em 1.5em;
+            font-size: clamp(16px, 2.2vmin, 24px);
             border-radius: 30px;
             cursor: pointer;
             transition: all 0.3s ease;

@@ -198,14 +198,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const fetchWords = async (sheetName) => {
         try {
+            // First, try to fetch from the network
             const response = await fetch(`${BASE_OPENSHEET_URL}${encodeURIComponent(sheetName)}`);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
+            console.log(`Successfully fetched words for ${sheetName} from the network.`);
             return data.map(row => row.Word?.toUpperCase()).filter(word => word && word.length > 1);
-        } catch (error) {
-            console.error(`Error fetching words for ${sheetName}:`, error);
-            alert(`Failed to load words for \"${sheetName}\". Please check the sheet name and public access.`);
-            return [];
+        } catch (networkError) {
+            console.warn(`Network fetch failed for ${sheetName}. Attempting to load from local 'words.json'.`, networkError);
+            // If network fails, try to load from local JSON
+            try {
+                const response = await fetch('words.json');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const localWords = await response.json();
+                
+                if (localWords[sheetName]) {
+                    console.log(`Successfully loaded words for ${sheetName} from local 'words.json'.`);
+                    return localWords[sheetName].map(row => row.Word?.toUpperCase()).filter(word => word && word.length > 1);
+                } else {
+                    throw new Error(`Level '${sheetName}' not found in local 'words.json'.`);
+                }
+            } catch (localError) {
+                console.error(`Error fetching words for ${sheetName} from both network and local file:`, localError);
+                alert(`Failed to load words for "${sheetName}". Please check your connection or the game files.`);
+                return [];
+            }
         }
     };
     

@@ -634,7 +634,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Allow pressing Enter key in the input field
     sheetNameInput.addEventListener('keypress', function(event) {
         if (event.key === 'Enter') {
-            event.preventDefault();
+            event.preventDefault(); // Prevent form submission if any
             handleCustomLevelInput();
         }
     });

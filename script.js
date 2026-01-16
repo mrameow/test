@@ -20,7 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
         maxNumHands: 1,
         modelComplexity: 1,
         minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
+        minTrackingConfidence: 0.5,
+        useCpuInference: true
     };
 
     // --- 2. UI ELEMENTS ---

@@ -1,10 +1,11 @@
 
-const CACHE_NAME = 'popar-kit-cache-v2';
+const CACHE_NAME = 'popar-kit-cache-v3';
 const urlsToCache = [
   './',
   './index.html',
   './style.css',
   './script.js',
+  './words.json', 
   './manifest.json',
   './camera_utils.js',
   './drawing_utils.js',

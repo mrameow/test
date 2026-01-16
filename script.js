@@ -185,52 +185,45 @@ document.addEventListener('DOMContentLoaded', function() {
     hands.onResults(onResults);
 
     // --- Camera Initialization ---
-    function initCamera() {
+    async function initCamera() {
         if (cameraInitialized) return;
 
-        // Call the audio initialization function here
         initializeAudio();
 
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        let constraints = {
+        const constraints = {
             video: {
-                facingMode: "user",
+                facingMode: 'user',
                 width: { ideal: 1280 },
                 height: { ideal: 720 }
             }
         };
-        if (isMobile) {
-            constraints.video.width = { ideal: window.innerHeight };
-            constraints.video.height = { ideal: window.innerWidth };
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            videoElement.srcObject = stream;
+            videoElement.onloadedmetadata = () => {
+                videoElement.play();
+
+                videoAspectRatio = videoElement.videoWidth / videoElement.videoHeight;
+                updateCanvasSize();
+
+                cameraInitialized = true;
+                cameraPermissionScreen.style.display = 'none';
+                showLevelSelectionScreen();
+
+                const camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await hands.send({ image: videoElement });
+                    },
+                    width: videoElement.videoWidth,
+                    height: videoElement.videoHeight
+                });
+                camera.start();
+            };
+        } catch (err) {
+            console.error("Failed to acquire camera feed: ", err);
+            alert(`Failed to acquire camera feed: ${err.name}: ${err.message}`);
         }
-
-        navigator.mediaDevices.getUserMedia(constraints)
-            .then((stream) => {
-                videoElement.srcObject = stream;
-                videoElement.onloadedmetadata = () => {
-                    videoElement.play();
-
-                    videoAspectRatio = videoElement.videoWidth / videoElement.videoHeight;
-                    updateCanvasSize();
-
-                    cameraInitialized = true;
-                    cameraPermissionScreen.style.display = 'none';
-                    showLevelSelectionScreen(); // Show level selection after camera init
-
-                    const camera = new Camera(videoElement, {
-                        onFrame: async () => {
-                            await hands.send({ image: videoElement });
-                        },
-                        width: videoElement.videoWidth,
-                        height: videoElement.videoHeight
-                    });
-                    camera.start();
-                };
-            })
-            .catch((err) => {
-                console.error("Error accessing camera: ", err);
-                alert("Camera access denied or error occurred. Please enable camera access to play the game.");
-            });
     }
 
     // --- MediaPipe Results Handling ---

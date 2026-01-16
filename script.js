@@ -1,13 +1,4 @@
 
-// Service Worker Registration
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-            .then(registration => console.log('ServiceWorker registration successful with scope: ', registration.scope))
-            .catch(err => console.log('ServiceWorker registration failed: ', err));
-    });
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     // --- 1. CONFIGURATION ---
     const GOOGLE_SHEET_ID = '1ZMEfBGZQHGf-UVvNJj8D7cOhQ3M2Z2cYNBrNMT4pnn0';
@@ -440,6 +431,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 7. INITIALIZATION ---
     const main = () => {
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+            .then((reg) => {
+                console.log('Service worker registered.', reg);
+            });
+        }
+
+        // PWA Installation
+        let deferredInstallPrompt = null;
+        const installButton = document.getElementById("install-button");
+
+        window.addEventListener("beforeinstallprompt", (e) => {
+            e.preventDefault();
+            deferredInstallPrompt = e;
+            installButton.hidden = false;
+        });
+
+        installButton.addEventListener("click", async () => {
+            if (deferredInstallPrompt) {
+                deferredInstallPrompt.prompt();
+                const { outcome } = await deferredInstallPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    console.log('User accepted the install prompt');
+                } else {
+                    console.log('User dismissed the install prompt');
+                }
+                deferredInstallPrompt = null;
+                installButton.hidden = true;
+            }
+        });
+
+        window.addEventListener('appinstalled', (evt) => {
+            console.log('App installed');
+        });
+
         setupEventListeners();
         updateCanvasSize();
         setSfxVolume(ui.sfxVolumeSlider.value);

@@ -93,7 +93,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 5a. UI & Drawing Functions ---
     const showScreen = (screen) => {
         [ui.cameraPermissionScreen, ui.levelSelectionScreen, ui.startScreen, ui.gameOverScreen].forEach(s => s.style.display = 'none');
-        screen.style.display = 'flex';
+        if (screen) {
+            screen.style.display = 'flex';
+        }
     };
 
     const updateCanvasSize = () => {
@@ -181,7 +183,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const playSound = (sound) => {
         if (sound) {
             sound.currentTime = 0;
-            sound.play().catch(e => console.error("Audio playback failed:", e));
+            sound.play().catch(e => {
+                if (e.name !== 'AbortError') {
+                    console.error("Audio playback failed:", e);
+                }
+            });
         }
     };
 
@@ -372,7 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.score.textContent = state.score;
         ui.mainMenuBtn.style.display = 'block';
 
-        showScreen(document.createDocumentFragment()); // Hide all major screens
+        showScreen(null); // Hide all major screens
         loadQuestion(state.selectedQuestions[0]);
     };
 

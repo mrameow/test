@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
         feedback: document.getElementById('feedback'),
         startScreenTitle: document.getElementById('start-screen-title'),
         startScreenDescription: document.getElementById('start-screen-description'),
+        installButton: document.getElementById('install-button'),
     };
 
     // --- 3. AUDIO ELEMENTS ---
@@ -67,6 +68,8 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedQuestions: [],
         waitingForNextQuestion: false,
         selectedLevelName: '',
+        deferredInstallPrompt: null,
+        isInstallable: false,
     };
 
     const hands = new Hands(MEDIAPIPE_HANDS_CONFIG);
@@ -78,8 +81,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 5a. UI & Drawing Functions ---
     const showScreen = (screen) => {
         [ui.cameraPermissionScreen, ui.levelSelectionScreen, ui.startScreen, ui.gameOverScreen].forEach(s => s.style.display = 'none');
+        
+        ui.installButton.hidden = true;
+
         if (screen) {
             screen.style.display = 'flex';
+            if (screen === ui.levelSelectionScreen && state.isInstallable) {
+                ui.installButton.hidden = false;
+            }
         }
     };
 
@@ -457,26 +466,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // PWA Installation
-        let deferredInstallPrompt = null;
-        const installButton = document.getElementById("install-button");
-
         window.addEventListener("beforeinstallprompt", (e) => {
             e.preventDefault();
-            deferredInstallPrompt = e;
-            installButton.hidden = false;
+            state.deferredInstallPrompt = e;
+            state.isInstallable = true;
+            if (ui.levelSelectionScreen.style.display === 'flex') {
+                ui.installButton.hidden = false;
+            }
         });
 
-        installButton.addEventListener("click", async () => {
-            if (deferredInstallPrompt) {
-                deferredInstallPrompt.prompt();
-                const { outcome } = await deferredInstallPrompt.userChoice;
+        ui.installButton.addEventListener("click", async () => {
+            if (state.deferredInstallPrompt) {
+                state.deferredInstallPrompt.prompt();
+                const { outcome } = await state.deferredInstallPrompt.userChoice;
                 if (outcome === 'accepted') {
                     console.log('User accepted the install prompt');
                 } else {
                     console.log('User dismissed the install prompt');
                 }
-                deferredInstallPrompt = null;
-                installButton.hidden = true;
+                state.deferredInstallPrompt = null;
+                state.isInstallable = false;
+                ui.installButton.hidden = true;
             }
         });
 

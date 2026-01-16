@@ -194,7 +194,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const initializeAudio = () => {
         audio.backgroundMusic.volume = ui.bgmVolumeSlider.value;
         playSound(audio.backgroundMusic);
-        Object.values(audio).forEach(sound => sound.load());
     };
     
     const setSfxVolume = (volume) => {
@@ -388,7 +387,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelector('#game-over p').innerHTML = `Your score: <span id="final-score">${state.score}</span>/${state.selectedQuestions.length}`;
         showScreen(ui.gameOverScreen);
         ui.mainMenuBtn.style.display = 'none';
-        playSound(audio.backgroundMusic);
     };
     
     const selectLevel = (levelName) => {

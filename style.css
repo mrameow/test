@@ -275,41 +275,45 @@
             color: white;
         }
 
-        .word-display {
+       .word-display {
             position: absolute;
-            bottom: 100px;
-            left: 0;
-            width: 100%;
+            bottom: 5vh; /* Use viewport height */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%; /* Max width */
             text-align: center;
             z-index: 3;
         }
 
         .word-container {
             display: inline-flex;
+            flex-wrap: wrap; /* Allow wrapping */
+            justify-content: center; /* Center the letters when they wrap */
             background-color: rgba(255, 255, 255, 0.9);
-            padding: 15px 30px;
-            border-radius: 15px;
+            padding: 2vmin; /* Scalable padding */
+            border-radius: 2vmin; /* Scalable radius */
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
         }
 
         .letter-box {
-            width: 40px;
-            height: 50px;
-            margin: 0 5px;
+            width: 7vmin;
+            height: 9vmin;
+            margin: 0 1vmin;
             background-color: white;
-            border: 2px solid #3498db;
-            border-radius: 8px;
+            border: 0.5vmin solid #3498db;
+            border-radius: 1vmin;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 28px;
+            font-size: 5vmin;
             font-weight: bold;
             color: #333;
+            box-sizing: border-box;
         }
 
         .letter-box.missing {
             background-color: #f8f9fa;
-            border: 2px dashed #3498db;
+            border: 0.5vmin dashed #3498db;
             color: transparent;
         }
 
@@ -403,16 +407,6 @@
                 right: 5px;
                 padding: 5px;
                 font-size: 14px;
-            }
-
-            .word-display {
-                bottom: 60px;
-            }
-
-            .letter-box {
-                width: 30px;
-                height: 40px;
-                font-size: 22px;
             }
 
             .level-input-container {

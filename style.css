@@ -291,22 +291,22 @@
             flex-wrap: wrap; /* Allow wrapping */
             justify-content: center; /* Center the letters when they wrap */
             background-color: rgba(255, 255, 255, 0.9);
-            padding: 2vmin; /* Scalable padding */
-            border-radius: 2vmin; /* Scalable radius */
+            padding: clamp(10px, 2vmin, 16px);
+            border-radius: clamp(10px, 2vmin, 16px);
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
         }
 
         .letter-box {
-            width: clamp(35px, 7vmin, 70px);
-            height: clamp(45px, 9vmin, 90px);
-            margin: 0 clamp(5px, 1vmin, 10px);
+            width: clamp(35px, 7vmin, 56px);
+            height: clamp(45px, 9vmin, 72px);
+            margin: 0 clamp(5px, 1vmin, 8px);
             background-color: white;
-            border: clamp(2.5px, 0.5vmin, 5px) solid #3498db;
-            border-radius: clamp(5px, 1vmin, 10px);
+            border: clamp(2.5px, 0.5vmin, 4px) solid #3498db;
+            border-radius: clamp(5px, 1vmin, 8px);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: clamp(25px, 5vmin, 50px);
+            font-size: clamp(25px, 5vmin, 40px);
             font-weight: bold;
             color: #333;
             box-sizing: border-box;
@@ -314,7 +314,7 @@
 
         .letter-box.missing {
             background-color: #f8f9fa;
-            border: 0.5vmin dashed #3498db;
+            border: clamp(2.5px, 0.5vmin, 4px) dashed #3498db;
             color: transparent;
         }
 

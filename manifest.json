@@ -3,17 +3,17 @@
   "name": "PopAR Kit",
   "icons": [
     {
-      "src": "images/hello-icon-144.png",
+      "src": "icon/hello-icon-144.png",
       "type": "image/png",
       "sizes": "144x144"
     },
     {
-      "src": "images/hello-icon-192.png",
+      "src": "icon/hello-icon-192.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "images/hello-icon-512.png",
+      "src": "icon/hello-icon-512.png",
       "type": "image/png",
       "sizes": "512x512"
     }

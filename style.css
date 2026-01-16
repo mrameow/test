@@ -248,17 +248,18 @@
             justify-content: center;
             z-index: 10;
             text-align: center;
-            padding: 20px;
+            padding: 4vmin;
             border-radius: 16px;
+            box-sizing: border-box;
         }
 
         .camera-permission h2 {
-            font-size: 28px;
+            font-size: clamp(24px, 5vmin, 48px);
             margin-bottom: 20px;
         }
 
         .camera-permission p {
-            font-size: 18px;
+            font-size: clamp(16px, 3vmin, 24px);
             margin-bottom: 30px;
             max-width: 80%;
         }

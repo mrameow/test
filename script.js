@@ -22,13 +22,6 @@ document.addEventListener('DOMContentLoaded', () => {
         minDetectionConfidence: 0.5,
         minTrackingConfidence: 0.5
     };
-    const CAMERA_CONSTRAINTS = {
-        video: {
-            facingMode: 'user',
-            width: { ideal: 1280, max: 1920 },
-            height: { ideal: 720, max: 1080 }
-        }
-    };
 
     // --- 2. UI ELEMENTS ---
     const ui = {
@@ -248,14 +241,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.cameraInitialized) return;
         initializeAudio();
 
+        const processVideo = async () => {
+            // Ensure the video is playing before sending frames
+            if (!ui.videoElement.paused && !ui.videoElement.ended) {
+                await hands.send({ image: ui.videoElement });
+            }
+            requestAnimationFrame(processVideo);
+        };
+
         try {
-            const stream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
+            // Simplified constraints for better mobile compatibility
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
             ui.videoElement.srcObject = stream;
-            
-            const videoSender = new VideoFrame(
-                await hands.send({ image: ui.videoElement })
-            );
-            videoSender.start();
 
             ui.videoElement.onloadedmetadata = () => {
                 ui.videoElement.play();
@@ -263,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateCanvasSize();
                 state.cameraInitialized = true;
                 showLevelSelectionScreen();
+                processVideo(); // Start the processing loop
             };
         } catch (err) {
             console.error("Failed to acquire camera feed: ", err);

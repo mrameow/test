@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return data.map(row => row.Word?.toUpperCase()).filter(word => word && word.length > 1);
         } catch (error) {
             console.error(`Error fetching words for ${sheetName}:`, error);
-            alert(`Failed to load words for "${sheetName}". Please check the sheet name and public access.`);
+            alert(`Failed to load words for \"${sheetName}\". Please check the sheet name and public access.`);
             return [];
         }
     };
@@ -392,6 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.startScreenDescription.textContent = 'Use your index finger to pop the correct letter bubble!';
         ui.startBtn.textContent = 'Start Quiz';
         ui.startBtn.onclick = startGame;
+        ui.startBtn.style.display = 'block'; // Ensure the start button is visible
         showScreen(ui.startScreen);
     };
     

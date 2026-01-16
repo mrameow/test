@@ -25,8 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const CAMERA_CONSTRAINTS = {
         video: {
             facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 }
         }
     };
 
@@ -251,19 +251,18 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
             ui.videoElement.srcObject = stream;
+            
+            const videoSender = new VideoFrame(
+                await hands.send({ image: ui.videoElement })
+            );
+            videoSender.start();
+
             ui.videoElement.onloadedmetadata = () => {
                 ui.videoElement.play();
                 state.videoAspectRatio = ui.videoElement.videoWidth / ui.videoElement.videoHeight;
                 updateCanvasSize();
                 state.cameraInitialized = true;
                 showLevelSelectionScreen();
-
-                const camera = new Camera(ui.videoElement, {
-                    onFrame: async () => await hands.send({ image: ui.videoElement }),
-                    width: ui.videoElement.videoWidth,
-                    height: ui.videoElement.videoHeight,
-                });
-                camera.start();
             };
         } catch (err) {
             console.error("Failed to acquire camera feed: ", err);

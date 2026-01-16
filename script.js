@@ -1,222 +1,262 @@
+
+// Service Worker Registration
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').then(registration => {
-            console.log('ServiceWorker registration successful with scope: ', registration.scope);
-        }, err => {
-            console.log('ServiceWorker registration failed: ', err);
-        });
+        navigator.serviceWorker.register('./sw.js')
+            .then(registration => console.log('ServiceWorker registration successful with scope: ', registration.scope))
+            .catch(err => console.log('ServiceWorker registration failed: ', err));
     });
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    const videoElement = document.getElementById('video-input');
-    const outputCanvas = document.getElementById('output-canvas');
-    const ctx = outputCanvas.getContext('2d');
-    const scoreElement = document.getElementById('score');
-    const questionCounterElement = document.getElementById('question-counter');
-
-    const cameraPermissionScreen = document.getElementById('camera-permission');
-    const levelSelectionScreen = document.getElementById('level-selection-screen');
-    const startScreen = document.getElementById('start-screen');
-    const gameOverScreen = document.getElementById('game-over');
-
-    const cameraBtn = document.getElementById('camera-btn');
-    const startBtn = document.getElementById('start-btn');
-    const restartBtn = document.getElementById('restart-btn');
-    const sheetNameInput = document.getElementById('sheet-name-input');
-    const goBtn = document.getElementById('go-btn');
-    const levelButtonsContainer = document.getElementById('level-buttons-container');
-    const mainMenuBtn = document.getElementById('main-menu-btn');
-    const bgmVolumeSlider = document.getElementById('bgm-volume');
-    const sfxVolumeSlider = document.getElementById('sfx-volume');
-
-    const finalScoreElement = document.getElementById('final-score');
-    const handStatusElement = document.getElementById('hand-status');
-    const videoContainer = document.querySelector('.video-container');
-    const wordContainer = document.getElementById('word-container');
-    const feedbackElement = document.getElementById('feedback');
-    const startScreenTitle = document.getElementById('start-screen-title');
-    const startScreenDescription = document.getElementById('start-screen-description');
-
-    // Game state
-    let score = 0;
-    let currentQuestionIndex = 0;
-    let gameActive = false;
-    let letterBubbles = [];
-    let handLandmarks = null;
-    let cameraInitialized = false;
-    let videoAspectRatio = 16 / 9;
-    let currentWord = "";
-    let missingLetterIndex = 0;
-    let correctLetter = "";
-    let selectedQuestions = [];
-    let waitingForNextQuestion = false;
-    let fetchedWords = [];
-
-    // Audio elements
-    const backgroundMusic = document.getElementById('backgroundMusic');
-    const buttonClickSound = document.getElementById('buttonClickSound');
-    const popBubbleSound = document.getElementById('popBubbleSound');
-    const correctAnswerSound = document.getElementById('correctAnswerSound');
-    const wrongAnswerSound = document.getElementById('wrongAnswerSound');
-
-    // Replay sound function
-    function playSound(soundElement) {
-        if (soundElement) {
-            soundElement.currentTime = 0;
-            soundElement.play().catch(e => console.error("Audio playback failed:", e));
+document.addEventListener('DOMContentLoaded', () => {
+    // --- 1. CONFIGURATION ---
+    const GOOGLE_SHEET_ID = '1ZMEfBGZQHGf-UVvNJj8D7cOhQ3M2Z2cYNBrNMT4pnn0';
+    const BASE_OPENSHEET_URL = `https://opensheet.elk.sh/${GOOGLE_SHEET_ID}/`;
+    const AVAILABLE_LEVELS = ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"];
+    const MEDIAPIPE_HANDS_CONFIG = {
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1635986972/${file}`
+    };
+    const HANDS_OPTIONS = {
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    };
+    const CAMERA_CONSTRAINTS = {
+        video: {
+            facingMode: 'user',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
         }
-    }
+    };
 
-    // New function to initialize audio and work around browser autoplay policies
-    function initializeAudio() {
-        if (backgroundMusic) {
-            backgroundMusic.volume = bgmVolumeSlider.value;
-            backgroundMusic.play().catch(e => console.error("Background music playback failed:", e));
-        }
-        if (buttonClickSound) buttonClickSound.load();
-        if (popBubbleSound) popBubbleSound.load();
-        if (correctAnswerSound) correctAnswerSound.load();
-        if (wrongAnswerSound) wrongAnswerSound.load();
-    }
+    // --- 2. UI ELEMENTS ---
+    const ui = {
+        videoElement: document.getElementById('video-input'),
+        outputCanvas: document.getElementById('output-canvas'),
+        ctx: document.getElementById('output-canvas').getContext('2d'),
+        score: document.getElementById('score'),
+        questionCounter: document.getElementById('question-counter'),
+        cameraPermissionScreen: document.getElementById('camera-permission'),
+        levelSelectionScreen: document.getElementById('level-selection-screen'),
+        startScreen: document.getElementById('start-screen'),
+        gameOverScreen: document.getElementById('game-over'),
+        cameraBtn: document.getElementById('camera-btn'),
+        startBtn: document.getElementById('start-btn'),
+        restartBtn: document.getElementById('restart-btn'),
+        sheetNameInput: document.getElementById('sheet-name-input'),
+        goBtn: document.getElementById('go-btn'),
+        levelButtonsContainer: document.getElementById('level-buttons-container'),
+        mainMenuBtn: document.getElementById('main-menu-btn'),
+        bgmVolumeSlider: document.getElementById('bgm-volume'),
+        sfxVolumeSlider: document.getElementById('sfx-volume'),
+        finalScore: document.getElementById('final-score'),
+        handStatus: document.getElementById('hand-status'),
+        videoContainer: document.querySelector('.video-container'),
+        wordContainer: document.getElementById('word-container'),
+        feedback: document.getElementById('feedback'),
+        startScreenTitle: document.getElementById('start-screen-title'),
+        startScreenDescription: document.getElementById('start-screen-description'),
+    };
 
-    function setSoundEffectVolume(volume) {
-        if (buttonClickSound) buttonClickSound.volume = volume;
-        if (popBubbleSound) popBubbleSound.volume = volume;
-        if (correctAnswerSound) correctAnswerSound.volume = volume;
-        if (wrongAnswerSound) wrongAnswerSound.volume = volume;
-    }
+    // --- 3. AUDIO ELEMENTS ---
+    const audio = {
+        backgroundMusic: document.getElementById('backgroundMusic'),
+        buttonClick: document.getElementById('buttonClickSound'),
+        popBubble: document.getElementById('popBubbleSound'),
+        correctAnswer: document.getElementById('correctAnswerSound'),
+        wrongAnswer: document.getElementById('wrongAnswerSound'),
+    };
 
-    // OpenSheet API URL base - YOUR SHEET ID HERE
-    const googleSheetId = '1ZMEfBGZQHGf-UVvNJj8D7cOhQ3M2Z2cYNBrNMT4pnn0'; // Your sheet ID
-    const baseOpenSheetUrl = `https://opensheet.elk.sh/${googleSheetId}/`;
+    // --- 4. GAME STATE ---
+    const state = {
+        score: 0,
+        currentQuestionIndex: 0,
+        gameActive: false,
+        letterBubbles: [],
+        handLandmarks: null,
+        cameraInitialized: false,
+        videoAspectRatio: 16 / 9,
+        currentWord: "",
+        correctLetter: "",
+        selectedQuestions: [],
+        waitingForNextQuestion: false,
+        selectedLevelName: '',
+    };
 
-    // Available levels (these should match your Google Sheet tab names exactly)
-    const availableLevels = ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6"];
-    let selectedLevelName = ''; // This will now come from user input or button click
+    const hands = new Hands(MEDIAPIPE_HANDS_CONFIG);
+    hands.setOptions(HANDS_OPTIONS);
+    hands.onResults(onHandResults);
 
-    // --- Utility Functions ---
-    function updateCanvasSize() {
-        const containerWidth = videoContainer.clientWidth;
-        const containerHeight = videoContainer.clientHeight;
+    // --- 5. CORE FUNCTIONS ---
 
+    // --- 5a. UI & Drawing Functions ---
+    const showScreen = (screen) => {
+        [ui.cameraPermissionScreen, ui.levelSelectionScreen, ui.startScreen, ui.gameOverScreen].forEach(s => s.style.display = 'none');
+        screen.style.display = 'flex';
+    };
+
+    const updateCanvasSize = () => {
+        const { clientWidth: containerWidth, clientHeight: containerHeight } = ui.videoContainer;
         let canvasWidth, canvasHeight;
-        if (containerWidth / containerHeight > videoAspectRatio) {
+
+        if (containerWidth / containerHeight > state.videoAspectRatio) {
             canvasHeight = containerHeight;
-            canvasWidth = containerHeight * videoAspectRatio;
+            canvasWidth = containerHeight * state.videoAspectRatio;
         } else {
             canvasWidth = containerWidth;
-            canvasHeight = containerWidth / videoAspectRatio;
+            canvasHeight = containerWidth / state.videoAspectRatio;
         }
-        outputCanvas.width = canvasWidth;
-        outputCanvas.height = canvasHeight;
-        outputCanvas.style.left = `${(containerWidth - canvasWidth) / 2}px`;
-        outputCanvas.style.top = `${(containerHeight - canvasHeight) / 2}px`;
-        videoElement.style.width = `${canvasWidth}px`;
-        videoElement.style.height = `${canvasHeight}px`;
-    }
 
-    window.addEventListener('resize', updateCanvasSize);
-    window.addEventListener('orientationchange', updateCanvasSize);
+        ui.outputCanvas.width = canvasWidth;
+        ui.outputCanvas.height = canvasHeight;
+        ui.outputCanvas.style.left = `${(containerWidth - canvasWidth) / 2}px`;
+        ui.outputCanvas.style.top = `${(containerHeight - canvasHeight) / 2}px`;
+        ui.videoElement.style.width = `${canvasWidth}px`;
+        ui.videoElement.style.height = `${canvasHeight}px`;
+    };
 
-    // Helper function to shuffle an array
-    function shuffleArray(array) {
+    const displayWord = (word, missingIndex) => {
+        ui.wordContainer.innerHTML = word.split('').map((letter, i) =>
+            `<div class="letter-box ${i === missingIndex ? 'missing' : ''}">${i === missingIndex ? '?' : letter}</div>`
+        ).join('');
+    };
+
+    const createLetterBubbles = (options) => {
+        const { width: canvasWidth, height: canvasHeight } = ui.outputCanvas;
+        const bubbleRadius = Math.min(canvasWidth, canvasHeight) * 0.05;
+
+        const positions = shuffleArray([
+            { x: canvasWidth * 0.25, y: canvasHeight * 0.3 },
+            { x: canvasWidth * 0.5, y: canvasHeight * 0.3 },
+            { x: canvasWidth * 0.75, y: canvasHeight * 0.3 },
+        ]);
+
+        state.letterBubbles = options.map((letter, i) => ({
+            x: positions[i].x,
+            y: positions[i].y,
+            radius: bubbleRadius,
+            letter,
+            isCorrect: letter === state.correctLetter,
+            createdAt: Date.now(),
+            popped: false,
+        }));
+    };
+
+    const drawLetterBubbles = () => {
+        state.letterBubbles.forEach(bubble => {
+            if (bubble.popped) return;
+            const { ctx } = ui;
+            const age = Date.now() - bubble.createdAt;
+            const pulseScale = 1 + 0.05 * Math.sin(age / 300);
+            const floatOffset = Math.sin(age / 1000) * 5;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(bubble.x, bubble.y + floatOffset, bubble.radius * pulseScale, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.strokeStyle = '#3498db';
+            ctx.lineWidth = 2;
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#333';
+            ctx.font = `bold ${bubble.radius * 0.8}px Comic Sans MS, Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.scale(-1, 1);
+            ctx.fillText(bubble.letter, -bubble.x, bubble.y + floatOffset);
+            ctx.restore();
+        });
+    };
+    
+    const showFeedback = (message, isCorrect) => {
+        ui.feedback.textContent = message;
+        ui.feedback.className = `feedback ${isCorrect ? 'correct' : 'incorrect'}`;
+        ui.feedback.style.opacity = 1;
+        setTimeout(() => { ui.feedback.style.opacity = 0; }, 1500);
+    };
+
+    // --- 5b. Audio Functions ---
+    const playSound = (sound) => {
+        if (sound) {
+            sound.currentTime = 0;
+            sound.play().catch(e => console.error("Audio playback failed:", e));
+        }
+    };
+
+    const initializeAudio = () => {
+        audio.backgroundMusic.volume = ui.bgmVolumeSlider.value;
+        playSound(audio.backgroundMusic);
+        Object.values(audio).forEach(sound => sound.load());
+    };
+    
+    const setSfxVolume = (volume) => {
+        [audio.buttonClick, audio.popBubble, audio.correctAnswer, audio.wrongAnswer].forEach(s => {
+            if (s) s.volume = volume;
+        });
+    };
+    
+    // --- 5c. API & Data Handling ---
+    const shuffleArray = (array) => {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [array[i], array[j]] = [array[j], array[i]];
         }
         return array;
-    }
+    };
 
-    // Function to generate random incorrect letters for options
-    function getRandomIncorrectLetters(correctLetter, count = 2) {
+    const fetchWords = async (sheetName) => {
+        try {
+            const response = await fetch(`${BASE_OPENSHEET_URL}${encodeURIComponent(sheetName)}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            return data.map(row => row.Word?.toUpperCase()).filter(word => word && word.length > 1);
+        } catch (error) {
+            console.error(`Error fetching words for ${sheetName}:`, error);
+            alert(`Failed to load words for "${sheetName}". Please check the sheet name and public access.`);
+            return [];
+        }
+    };
+    
+    const generateQuestionData = (word) => {
+        const missingIndex = Math.floor(Math.random() * (word.length - 2)) + 1;
+        const correctLetter = word[missingIndex];
         const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         const incorrectLetters = [];
-        while (incorrectLetters.length < count) {
+        while (incorrectLetters.length < 2) {
             const randomLetter = alphabet[Math.floor(Math.random() * alphabet.length)];
             if (randomLetter !== correctLetter && !incorrectLetters.includes(randomLetter)) {
                 incorrectLetters.push(randomLetter);
             }
         }
-        return incorrectLetters;
-    }
-
-    // Function to generate all question data (missing index, options) for a given word
-    function generateQuestionData(word) {
-        if (word.length === 0) {
-            console.warn("Attempted to generate question for an empty word.");
-            return null;
-        }
-        // Don't allow selecting first or last letter for very short words (e.g. 2-3 letters)
-        let missingIdx;
-        if (word.length <= 3) {
-            missingIdx = Math.floor(word.length / 2);
-        } else {
-            missingIdx = Math.floor(Math.random() * (word.length - 2)) + 1; // Any letter except first/last
-        }
-
-        const correctLtr = word[missingIdx];
-
-        const incorrectLtrs = getRandomIncorrectLetters(correctLtr, 2);
-        const options = shuffleArray([correctLtr, ...incorrectLtrs]); // Options array is already shuffled here
-
         return {
-            word: word,
-            missingIndex: missingIdx,
-            correctLetter: correctLtr,
-            options: options
+            word,
+            missingIndex,
+            correctLetter,
+            options: shuffleArray([correctLetter, ...incorrectLetters]),
         };
-    }
+    };
 
-    // --- MediaPipe Hands Setup ---
-    const hands = new Hands({
-        locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1635986972/${file}`;
-        }
-    });
-
-    hands.setOptions({
-        maxNumHands: 1,
-        modelComplexity: 1,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-    });
-
-    hands.onResults(onResults);
-
-    // --- Camera Initialization ---
-    async function initCamera() {
-        if (cameraInitialized) return;
-
+    // --- 5d. Camera & MediaPipe ---
+    const initCamera = async () => {
+        if (state.cameraInitialized) return;
         initializeAudio();
 
-        const constraints = {
-            video: {
-                facingMode: 'user',
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            }
-        };
-
         try {
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            videoElement.srcObject = stream;
-            videoElement.onloadedmetadata = () => {
-                videoElement.play();
-
-                videoAspectRatio = videoElement.videoWidth / videoElement.videoHeight;
+            const stream = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
+            ui.videoElement.srcObject = stream;
+            ui.videoElement.onloadedmetadata = () => {
+                ui.videoElement.play();
+                state.videoAspectRatio = ui.videoElement.videoWidth / ui.videoElement.videoHeight;
                 updateCanvasSize();
-
-                cameraInitialized = true;
-                cameraPermissionScreen.style.display = 'none';
+                state.cameraInitialized = true;
                 showLevelSelectionScreen();
 
-                const camera = new Camera(videoElement, {
-                    onFrame: async () => {
-                        await hands.send({ image: videoElement });
-                    },
-                    width: videoElement.videoWidth,
-                    height: videoElement.videoHeight
+                const camera = new Camera(ui.videoElement, {
+                    onFrame: async () => await hands.send({ image: ui.videoElement }),
+                    width: ui.videoElement.videoWidth,
+                    height: ui.videoElement.videoHeight,
                 });
                 camera.start();
             };
@@ -224,429 +264,184 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error("Failed to acquire camera feed: ", err);
             alert(`Failed to acquire camera feed: ${err.name}: ${err.message}`);
         }
-    }
-
-    // --- MediaPipe Results Handling ---
-    function onResults(results) {
+    };
+    
+    function onHandResults(results) {
+        const { ctx, outputCanvas } = ui;
         ctx.save();
         ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
-
-        if (results.image) {
-            ctx.drawImage(
-                results.image,
-                0, 0,
-                outputCanvas.width,
-                outputCanvas.height
-            );
-        }
+        ctx.drawImage(results.image, 0, 0, outputCanvas.width, outputCanvas.height);
 
         if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            handLandmarks = results.multiHandLandmarks[0];
-            handStatusElement.textContent = "Yes";
-
-            drawConnectors(ctx, handLandmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
-            drawLandmarks(ctx, handLandmarks, { color: '#FF0000', lineWidth: 1, radius: 3 });
-
-            if (gameActive && !waitingForNextQuestion && handLandmarks[8]) {
-                const indexFinger = {
-                    x: handLandmarks[8].x * outputCanvas.width,
-                    y: handLandmarks[8].y * outputCanvas.height
-                };
-                checkLetterBubbleCollision(indexFinger);
+            state.handLandmarks = results.multiHandLandmarks[0];
+            ui.handStatus.textContent = "Yes";
+            drawConnectors(ctx, state.handLandmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
+            drawLandmarks(ctx, state.handLandmarks, { color: '#FF0000', radius: 3 });
+            if (state.gameActive && !state.waitingForNextQuestion) {
+                checkBubbleCollision();
             }
         } else {
-            handLandmarks = null;
-            handStatusElement.textContent = "No";
+            state.handLandmarks = null;
+            ui.handStatus.textContent = "No";
         }
 
         drawLetterBubbles();
         ctx.restore();
     }
+    
+    // --- 5e. Game Logic ---
+    const loadQuestion = (question) => {
+        state.currentWord = question.word;
+        state.correctLetter = question.correctLetter;
+        state.waitingForNextQuestion = false;
 
-    // --- Game Visuals and Logic ---
-    function createLetterBubbles(options) {
-        letterBubbles = [];
-
-        const canvasWidth = outputCanvas.width;
-        const canvasHeight = outputCanvas.height;
-        const bubbleRadius = Math.min(canvasWidth, canvasHeight) * 0.05;
-
-        const positions = [
-            { x: canvasWidth * 0.25, y: canvasHeight * 0.3, label: 'left' },
-            { x: canvasWidth * 0.5, y: canvasHeight * 0.3, label: 'center' },
-            { x: canvasWidth * 0.75, y: canvasHeight * 0.3, label: 'right' }
-        ];
-        shuffleArray(positions); // Positions themselves are shuffled
-
-        for (let i = 0; i < options.length; i++) {
-            const newBubble = {
-                x: positions[i].x,
-                y: positions[i].y,
-                radius: bubbleRadius,
-                letter: options[i],
-                isCorrect: options[i] === correctLetter,
-                createdAt: Date.now(),
-                popped: false,
-                visualPositionLabel: positions[i].label // Added for console logging
-            };
-            letterBubbles.push(newBubble);
-
-            if (newBubble.isCorrect) {
-                console.log(`Correct answer "${newBubble.letter}" placed at ${newBubble.visualPositionLabel} (x: ${newBubble.x.toFixed(0)}, y: ${newBubble.y.toFixed(0)})`);
-            }
-        }
-    }
-
-    function drawLetterBubbles() {
-        letterBubbles.forEach(bubble => {
-            if (!bubble.popped) {
-                const age = Date.now() - bubble.createdAt;
-                const pulseScale = 1 + 0.05 * Math.sin(age / 300);
-                const floatOffset = Math.sin(age / 1000) * 5;
-
-                ctx.save();
-
-                const gradient = ctx.createRadialGradient(
-                    bubble.x, bubble.y + floatOffset, bubble.radius * 0.5,
-                    bubble.x, bubble.y + floatOffset, bubble.radius * 1.5
-                );
-                gradient.addColorStop(0, 'rgba(91, 189, 255, 0.8)');
-                gradient.addColorStop(1, 'rgba(91, 189, 255, 0)');
-
-                ctx.beginPath();
-                ctx.arc(bubble.x, bubble.y + floatOffset, bubble.radius * 1.5 * pulseScale, 0, Math.PI * 2);
-                ctx.fillStyle = gradient;
-                ctx.fill();
-
-                ctx.beginPath();
-                ctx.arc(bubble.x, bubble.y + floatOffset, bubble.radius * pulseScale, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-                ctx.fill();
-                ctx.strokeStyle = '#3498db';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-
-                ctx.fillStyle = '#333';
-                const fontSize = Math.max(20, Math.min(28, bubble.radius * 0.8));
-                ctx.font = `bold ${fontSize}px Comic Sans MS, Arial`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-
-                ctx.scale(-1, 1); // Mirror text
-                ctx.fillText(bubble.letter, -bubble.x, bubble.y + floatOffset);
-
-                ctx.restore();
-            }
-        });
-    }
-
-    function checkLetterBubbleCollision(indexFinger) {
-        letterBubbles.forEach(bubble => {
-            if (!bubble.popped) {
-                const distance = Math.sqrt(
-                    Math.pow(indexFinger.x - bubble.x, 2) +
-                    Math.pow(indexFinger.y - bubble.y, 2)
-                );
-
-                if (distance < bubble.radius) {
-                    bubble.popped = true;
-                    playSound(popBubbleSound); // Play pop sound
-
-                    if (bubble.isCorrect) {
-                        score++;
-                        scoreElement.textContent = score;
-                        showFeedback("Correct! 🎉", true);
-                        playSound(correctAnswerSound); // Play correct sound
-                    } else {
-                        showFeedback("Try again! 🤔", false);
-                        playSound(wrongAnswerSound); // Play wrong sound
-                    }
-
-                    createPopEffect(bubble.x, bubble.y, bubble.letter, bubble.isCorrect);
-
-                    waitingForNextQuestion = true;
-                    setTimeout(() => {
-                        currentQuestionIndex++;
-                        // Only check against the actual number of questions available
-                        if (currentQuestionIndex < selectedQuestions.length) {
-                            loadQuestion(selectedQuestions[currentQuestionIndex]);
-                        } else {
-                            endGame();
-                        }
-                        waitingForNextQuestion = false;
-                    }, 1500);
-                }
-            }
-        });
-    }
-
-    function createPopEffect(x, y, letter, isCorrect) {
-        const numParticles = 20;
-        const particles = [];
-        for (let i = 0; i < numParticles; i++) {
-            const angle = (i / numParticles) * Math.PI * 2;
-            const speed = 2 + Math.random() * 2;
-            particles.push({
-                x: x, y: y,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                radius: 2 + Math.random() * 3,
-                color: isCorrect ? '#2ecc71' : '#e74c3c',
-                life: 1.0
-            });
-        }
-        function animateParticles() {
-            ctx.save();
-            particles.forEach((p, index) => {
-                p.x += p.vx; p.y += p.vy; p.vy += 0.1;
-                p.life -= 0.02;
-                if (p.life <= 0) { particles.splice(index, 1); return; }
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
-                ctx.fillStyle = p.color;
-                ctx.globalAlpha = p.life;
-                ctx.fill();
-            });
-            ctx.restore();
-            if (particles.length > 0) { requestAnimationFrame(animateParticles); }
-        }
-        animateParticles();
-    }
-
-    function showFeedback(message, isCorrect) {
-        feedbackElement.textContent = message;
-        feedbackElement.className = isCorrect ? 'feedback correct' : 'feedback incorrect';
-        feedbackElement.style.opacity = 1;
-        setTimeout(() => { feedbackElement.style.opacity = 0; }, 1500);
-    }
-
-    function displayWord(word, missingIndex) {
-        wordContainer.innerHTML = '';
-        for (let i = 0; i < word.length; i++) {
-            const letterBox = document.createElement('div');
-            letterBox.className = i === missingIndex ? 'letter-box missing' : 'letter-box';
-            letterBox.textContent = i === missingIndex ? '?' : word[i];
-            wordContainer.appendChild(letterBox);
-        }
-    }
-
-    function loadQuestion(question) {
-        currentWord = question.word;
-        missingLetterIndex = question.missingIndex;
-        correctLetter = question.correctLetter;
-
-        displayWord(currentWord, missingLetterIndex);
+        displayWord(question.word, question.missingIndex);
         createLetterBubbles(question.options);
+        ui.questionCounter.textContent = `${state.currentQuestionIndex + 1}/${state.selectedQuestions.length}`;
+    };
 
-        // Update question counter to reflect the actual number of questions
-        questionCounterElement.textContent = `${currentQuestionIndex + 1}/${selectedQuestions.length}`;
-    }
+    const checkBubbleCollision = () => {
+        if (!state.handLandmarks?.[8]) return; // Index finger tip landmark
 
-    // Helper to set start button action and text
-    function setStartButtonAction(action, text) {
-        // Remove existing listener to prevent multiple bindings
-        startBtn.removeEventListener('click', startGame);
-        startBtn.removeEventListener('click', showLevelSelectionScreen);
-        // Add the new listener
-        startBtn.addEventListener('click', action);
-        startBtn.textContent = text;
-        startBtn.style.display = 'block'; // Ensure button is visible
-    }
+        const indexFinger = {
+            x: state.handLandmarks[8].x * ui.outputCanvas.width,
+            y: state.handLandmarks[8].y * ui.outputCanvas.height,
+        };
 
-    async function startGame() {
-        playSound(buttonClickSound);
-        if (!selectedLevelName) {
-            alert("No level selected. Please choose a level or enter a sheet name.");
-            showLevelSelectionScreen();
-            return;
-        }
+        for (const bubble of state.letterBubbles) {
+            if (bubble.popped) continue;
 
-        startScreenTitle.textContent = `Loading ${selectedLevelName} Words...`;
-        startScreenDescription.textContent = 'Please wait while we fetch the quiz words.';
-        startBtn.style.display = 'none'; // Hide button during loading
-        mainMenuBtn.style.display = 'none'; // Hide main menu button during loading on start screen
-
-        fetchedWords = [];
-        const fetchSuccess = await fetchWordsFromOpenSheet(selectedLevelName);
-
-        if (!fetchSuccess || fetchedWords.length === 0) {
-            startScreenTitle.textContent = 'Error!';
-            startScreenDescription.textContent = 'Could not load words for this level. Check the sheet name and ensure it has words in Column A.';
-            setStartButtonAction(showLevelSelectionScreen, 'Back to Level Selection'); // Reroute button
-            return;
-        }
-
-        // Generate questions for all fetched words, then select up to 10
-        let potentialQuestions = fetchedWords.map(word => generateQuestionData(word)).filter(q => q !== null);
-
-        // If there are no valid questions, display an error
-        if (potentialQuestions.length === 0) {
-            startScreenTitle.textContent = 'No Valid Words Found!';
-            startScreenDescription.textContent = `The sheet "${selectedLevelName}" does not contain any valid words (words with at least 2 letters, and having a 'Word' column header).`;
-            setStartButtonAction(showLevelSelectionScreen, 'Back to Level Selection'); // Reroute button
-            return;
-        }
-
-        // Select up to 10 questions, or all if fewer than 10 are available
-        selectedQuestions = selectRandomWords(potentialQuestions, Math.min(10, potentialQuestions.length));
-
-        score = 0;
-        currentQuestionIndex = 0;
-        gameActive = true;
-        letterBubbles = [];
-        waitingForNextQuestion = false;
-
-        scoreElement.textContent = score;
-        // Update question counter to reflect the actual number of questions for this quiz
-        questionCounterElement.textContent = `${currentQuestionIndex + 1}/${selectedQuestions.length}`;
-
-        startScreen.style.display = 'none';
-        gameOverScreen.style.display = 'none';
-        mainMenuBtn.style.display = 'block'; // Show main menu button once game starts
-
-        loadQuestion(selectedQuestions[0]);
-    }
-
-    function endGame() {
-        gameActive = false;
-        finalScoreElement.textContent = score;
-        // Update final score display to reflect the actual total questions
-        document.querySelector('#game-over p').innerHTML = `Your score: <span id="final-score">${score}</span>/${selectedQuestions.length}`;
-        gameOverScreen.style.display = 'flex';
-        mainMenuBtn.style.display = 'none'; // Hide main menu button on game over screen
-        backgroundMusic.play().catch(e => console.error("Background music playback failed:", e)); // Resume music after game
-    }
-
-    function selectRandomWords(words, count) {
-        const shuffled = [...words];
-        shuffleArray(shuffled);
-        return shuffled.slice(0, Math.min(count, shuffled.length));
-    }
-
-    async function fetchWordsFromOpenSheet(sheetName) {
-        try {
-            const url = `${baseOpenSheetUrl}${encodeURIComponent(sheetName)}`; // Encode sheet name for URL safety
-            console.log(`Fetching words from: ${url}`);
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status.toLocaleString()}`);
+            const distance = Math.hypot(indexFinger.x - bubble.x, indexFinger.y - bubble.y);
+            if (distance < bubble.radius) {
+                handleBubblePop(bubble);
+                break; 
             }
-            const data = await response.json();
-
-            fetchedWords = data.map(row => row.Word ? row.Word.toUpperCase() : null).filter(word => word !== null && word.length > 1); // Filter out words with length 0 or 1
-            console.log(`Words fetched for ${sheetName}:`, fetchedWords);
-            return true;
-        } catch (error) {
-            console.error(`Error fetching words from OpenSheet for ${sheetName}:`, error);
-            // The alert is still useful to explain the issue before the button appears.
-            alert(`Failed to load quiz words for "${sheetName}". Please ensure the sheet name is exact, the sheet is public, and it contains words in 'Word' column.`);
-            fetchedWords = [];
-            return false;
         }
-    }
+    };
 
-    // --- Level Selection Logic (Updated to include both methods) ---
-    function showLevelSelectionScreen() {
-        // Reset game state when returning to main menu/level selection
-        gameActive = false;
-        letterBubbles = [];
-        wordContainer.innerHTML = ''; // Clear displayed word
-        feedbackElement.textContent = ''; // Clear feedback
-        mainMenuBtn.style.display = 'none'; // Ensure main menu button is hidden here
+    const handleBubblePop = (bubble) => {
+        bubble.popped = true;
+        state.waitingForNextQuestion = true;
+        playSound(audio.popBubble);
 
-        startScreen.style.display = 'none';
-        gameOverScreen.style.display = 'none';
-        levelSelectionScreen.style.display = 'flex';
-        populateLevelButtons(); // Populate static level buttons
-        sheetNameInput.value = selectedLevelName; // Pre-fill if a level was previously selected
-        sheetNameInput.focus();
-        // Ensure the start button is correctly set for starting a new game
-        setStartButtonAction(startGame, 'Start Quiz');
-
-        // Resume background music if it's paused
-        if (backgroundMusic && backgroundMusic.paused) {
-            backgroundMusic.play().catch(e => console.error("Background music playback failed:", e));
+        if (bubble.isCorrect) {
+            state.score++;
+            ui.score.textContent = state.score;
+            showFeedback("Correct! 🎉", true);
+            playSound(audio.correctAnswer);
+        } else {
+            showFeedback("Try again! 🤔", false);
+            playSound(audio.wrongAnswer);
         }
-    }
 
-    // Re-added function to populate the static level buttons
-    function populateLevelButtons() {
-        levelButtonsContainer.innerHTML = ''; // Clear existing buttons
-        availableLevels.forEach(level => {
+        setTimeout(() => {
+            state.currentQuestionIndex++;
+            if (state.currentQuestionIndex < state.selectedQuestions.length) {
+                loadQuestion(state.selectedQuestions[state.currentQuestionIndex]);
+            } else {
+                endGame();
+            }
+        }, 1500);
+    };
+
+    const startGame = async () => {
+        playSound(audio.buttonClick);
+        if (!state.selectedLevelName) {
+            alert("Please choose a level.");
+            return;
+        }
+
+        ui.startScreenTitle.textContent = `Loading ${state.selectedLevelName}...`;
+        ui.startScreenDescription.textContent = 'Fetching quiz words...';
+        ui.startBtn.style.display = 'none';
+
+        const words = await fetchWords(state.selectedLevelName);
+        if (words.length === 0) {
+            ui.startScreenTitle.textContent = 'Error!';
+            ui.startScreenDescription.textContent = 'Could not load words for this level.';
+            ui.startBtn.textContent = 'Back to Levels';
+            ui.startBtn.onclick = showLevelSelectionScreen;
+            ui.startBtn.style.display = 'block';
+            return;
+        }
+
+        state.selectedQuestions = shuffleArray(words.map(generateQuestionData)).slice(0, 10);
+        state.score = 0;
+        state.currentQuestionIndex = 0;
+        state.gameActive = true;
+        ui.score.textContent = state.score;
+        ui.mainMenuBtn.style.display = 'block';
+
+        showScreen(document.createDocumentFragment()); // Hide all major screens
+        loadQuestion(state.selectedQuestions[0]);
+    };
+
+    const endGame = () => {
+        state.gameActive = false;
+        ui.finalScore.textContent = state.score;
+        document.querySelector('#game-over p').innerHTML = `Your score: <span id="final-score">${state.score}</span>/${state.selectedQuestions.length}`;
+        showScreen(ui.gameOverScreen);
+        ui.mainMenuBtn.style.display = 'none';
+        playSound(audio.backgroundMusic);
+    };
+    
+    const selectLevel = (levelName) => {
+        state.selectedLevelName = levelName;
+        ui.startScreenTitle.textContent = `✏️ PopAR Kit - ${levelName} ✏️`;
+        ui.startScreenDescription.textContent = 'Use your index finger to pop the correct letter bubble!';
+        ui.startBtn.textContent = 'Start Quiz';
+        ui.startBtn.onclick = startGame;
+        showScreen(ui.startScreen);
+    };
+    
+    const showLevelSelectionScreen = () => {
+        state.gameActive = false;
+        state.letterBubbles = [];
+        ui.wordContainer.innerHTML = '';
+        ui.feedback.textContent = '';
+        ui.mainMenuBtn.style.display = 'none';
+        
+        // Populate level buttons
+        ui.levelButtonsContainer.innerHTML = '';
+        AVAILABLE_LEVELS.forEach(level => {
             const button = document.createElement('button');
             button.className = 'btn';
             button.textContent = level;
-            button.addEventListener('click', () => {
-                playSound(buttonClickSound);
-                selectLevel(level);
-            }); // Calls selectLevel directly
-            levelButtonsContainer.appendChild(button);
+            button.onclick = () => { playSound(audio.buttonClick); selectLevel(level); };
+            ui.levelButtonsContainer.appendChild(button);
         });
-    }
 
-    // Handles selection from a predefined level button
-    function selectLevel(levelName) {
-        selectedLevelName = levelName;
-        levelSelectionScreen.style.display = 'none';
-        startScreen.style.display = 'flex';
+        showScreen(ui.levelSelectionScreen);
+    };
 
-        startScreenTitle.textContent = `✏️ PopAR Kit - ${selectedLevelName} ✏️`;
-        startScreenDescription.textContent = `Use your index finger to pop the bubble with the correct letter to complete the word. This quiz will have ${selectedLevelName.includes("Level") ? "10" : "up to 10"} word spellings!`; // Updated description
-        setStartButtonAction(startGame, 'Start Quiz'); // Always reset to startGame when a level is selected
-    }
+    // --- 6. EVENT LISTENERS ---
+    const setupEventListeners = () => {
+        window.addEventListener('resize', updateCanvasSize);
+        window.addEventListener('orientationchange', updateCanvasSize);
+        
+        ui.cameraBtn.addEventListener('click', initCamera);
+        ui.restartBtn.addEventListener('click', () => { playSound(audio.buttonClick); showLevelSelectionScreen(); });
+        ui.mainMenuBtn.addEventListener('click', () => { playSound(audio.buttonClick); showLevelSelectionScreen(); });
+        
+        const handleCustomLevel = () => {
+            playSound(audio.buttonClick);
+            const sheetName = ui.sheetNameInput.value.trim();
+            if (sheetName) selectLevel(sheetName);
+        };
+        ui.goBtn.addEventListener('click', handleCustomLevel);
+        ui.sheetNameInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleCustomLevel());
+        
+        ui.bgmVolumeSlider.addEventListener('input', (e) => audio.backgroundMusic.volume = e.target.value);
+        ui.sfxVolumeSlider.addEventListener('input', (e) => setSfxVolume(e.target.value));
+    };
 
-    // Handles selection from the custom input field
-    function handleCustomLevelInput() {
-        playSound(buttonClickSound);
-        const enteredSheetName = sheetNameInput.value.trim();
-        if (!enteredSheetName) {
-            alert("Please enter a sheet name to continue.");
-            return;
-        }
+    // --- 7. INITIALIZATION ---
+    const main = () => {
+        setupEventListeners();
+        updateCanvasSize();
+        setSfxVolume(ui.sfxVolumeSlider.value);
+        showScreen(ui.cameraPermissionScreen);
+    };
 
-        selectLevel(enteredSheetName); // Use the same function to set the level and show start screen
-    }
-
-    // --- Event Listeners ---
-    restartBtn.addEventListener('click', () => {
-        playSound(buttonClickSound);
-        showLevelSelectionScreen();
-    });
-
-    cameraBtn.addEventListener('click', () => {
-        // This is the first interaction. We'll initialize the audio here.
-        initCamera();
-    });
-
-    goBtn.addEventListener('click', handleCustomLevelInput); // Listener for the 'Go!' button
-    mainMenuBtn.addEventListener('click', () => {
-        playSound(buttonClickSound);
-        showLevelSelectionScreen();
-    });
-
-    // Allow pressing Enter key in the input field
-    sheetNameInput.addEventListener('keypress', function(event) {
-        if (event.key === 'Enter') {
-            event.preventDefault(); // Prevent form submission if any
-            handleCustomLevelInput();
-        }
-    });
-
-    // Volume slider event listeners
-    bgmVolumeSlider.addEventListener('input', (event) => {
-        if (backgroundMusic) {
-            backgroundMusic.volume = event.target.value;
-        }
-    });
-
-    sfxVolumeSlider.addEventListener('input', (event) => {
-        const volume = event.target.value;
-        setSoundEffectVolume(volume);
-    });
-
-
-    // --- Initial Setup ---
-    updateCanvasSize();
-    cameraPermissionScreen.style.display = 'flex'; // Start by showing camera permission
-    setSoundEffectVolume(sfxVolumeSlider.value); // Set initial volume for sound effects
+    main();
 });

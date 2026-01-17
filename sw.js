@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'popar-kit-cache-v7';
+const CACHE_NAME = 'popar-kit-cache-v8';
 const urlsToCache = [
   './',
   './index.html',
@@ -69,12 +69,19 @@ self.addEventListener('fetch', event => {
           }
           return networkResponse;
         }).catch(() => {
-          // If the network fetch fails (e.g., offline) and there is no cache match,
-          // return a synthetic error response. This prevents the service worker from crashing.
-          return new Response(
-            JSON.stringify({ error: 'offline' }),
-            { headers: { 'Content-Type': 'application/json' }, status: 503 }
-          );
+          // If the network fetch fails, provide a specific response based on the request type.
+          if (event.request.url.endsWith('words.json')) {
+            // For the words.json file, return a JSON error response.
+            // This is what the application logic expects.
+            return new Response(
+              JSON.stringify({ error: 'offline' }),
+              { headers: { 'Content-Type': 'application/json' }, status: 503 }
+            );
+          }
+          // For any other file type (e.g., audio, images), return a generic
+          // error response. This prevents the browser from logging a content-type
+          // mismatch error for media elements.
+          return new Response('', { status: 503, statusText: 'Service Unavailable' });
         });
       });
     })

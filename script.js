@@ -388,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleBubblePop = (bubble) => {
         bubble.popped = true;
-        state.waitingForNextQuestion =.run_terminal_command true;
+        state.waitingForNextQuestion = true;
         playSound(audio.popBubble);
 
         if (bubble.isCorrect) {

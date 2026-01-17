@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'popar-kit-cache-v6';
+const CACHE_NAME = 'popar-kit-cache-v7';
 const urlsToCache = [
   './',
   './index.html',
@@ -60,7 +60,7 @@ self.addEventListener('fetch', event => {
           return response;
         }
 
-        // Otherwise, fetch from the network
+        // Otherwise, fetch from the network and handle failures
         return fetch(event.request).then(networkResponse => {
           // If the fetch is successful, clone it, cache it, and return it.
           if (networkResponse && networkResponse.status === 200) {
@@ -68,6 +68,13 @@ self.addEventListener('fetch', event => {
             cache.put(event.request, responseToCache);
           }
           return networkResponse;
+        }).catch(() => {
+          // If the network fetch fails (e.g., offline) and there is no cache match,
+          // return a synthetic error response. This prevents the service worker from crashing.
+          return new Response(
+            JSON.stringify({ error: 'offline' }),
+            { headers: { 'Content-Type': 'application/json' }, status: 503 }
+          );
         });
       });
     })

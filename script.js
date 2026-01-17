@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1635986972/${file}`
     };
     const HANDS_OPTIONS = {
-        maxNumHands: 1,
+        maxNumHands: 2,
         modelComplexity: 1,
         minDetectionConfidence: 0.5,
         minTrackingConfidence: 0.5,
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentQuestionIndex: 0,
         gameActive: false,
         letterBubbles: [],
-        handLandmarks: null,
+        multiHandLandmarks: [],
         cameraInitialized: false,
         videoAspectRatio: 16 / 9,
         currentWord: "",
@@ -331,16 +331,18 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
         ctx.drawImage(results.image, 0, 0, outputCanvas.width, outputCanvas.height);
 
-        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            state.handLandmarks = results.multiHandLandmarks[0];
+        state.multiHandLandmarks = results.multiHandLandmarks || [];
+
+        if (state.multiHandLandmarks.length > 0) {
             ui.handStatus.textContent = "Yes";
-            drawConnectors(ctx, state.handLandmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
-            drawLandmarks(ctx, state.handLandmarks, { color: '#FF0000', radius: 3 });
+            for (const landmarks of state.multiHandLandmarks) {
+                window.drawConnectors(ctx, landmarks, window.HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
+                window.drawLandmarks(ctx, landmarks, { color: '#FF0000', radius: 3 });
+            }
             if (state.gameActive && !state.waitingForNextQuestion) {
                 checkBubbleCollision();
             }
         } else {
-            state.handLandmarks = null;
             ui.handStatus.textContent = "No";
         }
 
@@ -360,20 +362,24 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const checkBubbleCollision = () => {
-        if (!state.handLandmarks?.[8]) return; // Index finger tip landmark
+        if (state.multiHandLandmarks.length === 0) return;
 
-        const indexFinger = {
-            x: state.handLandmarks[8].x * ui.outputCanvas.width,
-            y: state.handLandmarks[8].y * ui.outputCanvas.height,
-        };
+        for (const landmarks of state.multiHandLandmarks) {
+            if (!landmarks?.[8]) continue; // Index finger tip landmark
 
-        for (const bubble of state.letterBubbles) {
-            if (bubble.popped) continue;
+            const indexFinger = {
+                x: landmarks[8].x * ui.outputCanvas.width,
+                y: landmarks[8].y * ui.outputCanvas.height,
+            };
 
-            const distance = Math.hypot(indexFinger.x - bubble.x, indexFinger.y - bubble.y);
-            if (distance < bubble.radius) {
-                handleBubblePop(bubble);
-                break; 
+            for (const bubble of state.letterBubbles) {
+                if (bubble.popped) continue;
+
+                const distance = Math.hypot(indexFinger.x - bubble.x, indexFinger.y - bubble.y);
+                if (distance < bubble.radius) {
+                    handleBubblePop(bubble);
+                    return; 
+                }
             }
         }
     };

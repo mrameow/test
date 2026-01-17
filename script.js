@@ -206,32 +206,73 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const fetchWords = async (sheetName) => {
-        try {
-            // First, try to fetch from the network
-            const response = await fetch(`${BASE_OPENSHEET_URL}${encodeURIComponent(sheetName)}`);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const data = await response.json();
-            console.log(`Successfully fetched words for ${sheetName} from the network.`);
-            return data.map(row => row.Word?.toUpperCase()).filter(word => word && word.length > 1);
-        } catch (networkError) {
-            console.warn(`Network fetch failed for ${sheetName}. Attempting to load from local 'words.json'.`, networkError);
-            // If network fails, try to load from local JSON
+        const localStorageKey = `words_${sheetName}`;
+
+        if (navigator.onLine) {
+            console.log(`Online. Fetching words for ${sheetName} from the network.`);
             try {
-                const response = await fetch('words.json');
+                const response = await fetch(`${BASE_OPENSHEET_URL}${encodeURIComponent(sheetName)}`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                const localWords = await response.json();
-                
-                if (localWords[sheetName]) {
-                    console.log(`Successfully loaded words for ${sheetName} from local 'words.json'.`);
-                    return localWords[sheetName].map(row => row.Word?.toUpperCase()).filter(word => word && word.length > 1);
-                } else {
-                    throw new Error(`Level '${sheetName}' not found in local 'words.json'.`);
+                const data = await response.json();
+                const words = data.map(row => row.Word?.toUpperCase()).filter(word => word && word.length > 1);
+
+                // Save to localStorage
+                try {
+                    localStorage.setItem(localStorageKey, JSON.stringify(words));
+                    console.log(`Successfully cached words for ${sheetName} in localStorage.`);
+                } catch (e) {
+                    console.warn(`Could not cache words for ${sheetName} in localStorage:`, e);
                 }
-            } catch (localError) {
-                console.error(`Error fetching words for ${sheetName} from both network and local file:`, localError);
-                alert(`Failed to load words for "${sheetName}". Please check your connection or the game files.`);
-                return [];
+
+                return words;
+            } catch (networkError) {
+                console.warn(`Network fetch failed for ${sheetName}. Attempting to load from cache/local file.`, networkError);
+                // Fall through to offline logic if network fails
             }
+        }
+
+        // --- Offline or Network Fetch Failed ---
+        console.log(`Offline or network error. Attempting to load words for ${sheetName} from local sources.`);
+
+        // 1. Try localStorage
+        try {
+            const cachedWords = localStorage.getItem(localStorageKey);
+            if (cachedWords) {
+                console.log(`Successfully loaded words for ${sheetName} from localStorage cache.`);
+                return JSON.parse(cachedWords);
+            }
+        } catch (e) {
+            console.warn(`Could not read words for ${sheetName} from localStorage:`, e);
+        }
+
+        // 2. Try local 'words.json' file
+        console.log(`No cache found for ${sheetName}. Attempting to load from local 'words.json'.`);
+        try {
+            const response = await fetch('words.json');
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const localWords = await response.json();
+
+            if (localWords[sheetName]) {
+                console.log(`Successfully loaded words for ${sheetName} from local 'words.json'.`);
+                // The structure in words.json is different, it has a "Word" property
+                const words = localWords[sheetName].map(row => row.Word?.toUpperCase()).filter(word => word && word.length > 1);
+                
+                // Try to cache this for next time
+                try {
+                    localStorage.setItem(localStorageKey, JSON.stringify(words));
+                     console.log(`Successfully cached words from 'words.json' for ${sheetName} in localStorage.`);
+                } catch (e) {
+                    console.warn(`Could not cache words from 'words.json' for ${sheetName} in localStorage:`, e);
+                }
+
+                return words;
+            } else {
+                throw new Error(`Level '${sheetName}' not found in local 'words.json'.`);
+            }
+        } catch (localError) {
+            console.error(`Fatal: Error fetching words for ${sheetName} from all sources.`, localError);
+            alert(`Failed to load words for "${sheetName}". The game cannot continue without the word list.`);
+            return [];
         }
     };
     

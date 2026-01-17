@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'popar-kit-cache-v4';
+const CACHE_NAME = 'popar-kit-cache-v5';
 const urlsToCache = [
   './',
   './index.html',
@@ -47,13 +47,29 @@ self.addEventListener('activate', event => {
   });
 
 self.addEventListener('fetch', event => {
+  // Ignore non-GET requests and API calls to OpenSheet
+  if (event.request.method !== 'GET' || event.request.url.includes('opensheet.elk.sh')) {
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request)
-      .then(response => {
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.match(event.request).then(response => {
+        // Return cached response if it exists
         if (response) {
           return response;
         }
-        return fetch(event.request);
-      })
+
+        // Otherwise, fetch from the network
+        return fetch(event.request).then(networkResponse => {
+          // If the fetch is successful, clone it, cache it, and return it.
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            cache.put(event.request, responseToCache);
+          }
+          return networkResponse;
+        });
+      });
+    })
   );
 });
